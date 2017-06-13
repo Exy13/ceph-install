@@ -1,0 +1,225 @@
+---
+- name: Allow all users to use sudo
+  user:
+    name: admin
+    group: wheel
+    append: yes
+    state: present
+  delegate_to: "{{ item.hostname }}"
+  with_items:
+    - "{{ ceph_monitors }}"
+    - "{{ ceph_osds }}"
+    - "{{ ceph_master }}"
+    - "{{ ceph_rgws }}"
+  become: yes
+  become_user: root
+
+- name: Generate ssh key for master
+  user:
+    name: admin
+    generate_ssh_key: yes
+    ssh_key_bits: 4096
+    ssh_key_file: .ssh/id_rsa
+    state: present
+
+- name: Get master public key
+  shell: "cat ~/.ssh/id_rsa.pub"
+  register: ssh_keys
+  changed_when: False
+
+- name: Debug print master key
+  debug:
+    msg: "{{ ssh_keys }}"
+  check_mode: no
+  when: not ansible_check_mode
+
+- name: Send key to all nodes
+  authorized_key:
+    user: admin
+    key: "{{ ssh_keys.stdout }}"
+  delegate_to: "{{ item.hostname }}"
+  with_items:
+    - "{{ ceph_monitors }}"
+    - "{{ ceph_osds }}"
+    - "{{ ceph_master }}"
+    - "{{ ceph_rgws }}"
+  check_mode: no
+  when: not ansible_check_mode
+
+- name: Add Ceph release key
+  apt_key:
+    url: "https://download.ceph.com/keys/release.asc"
+    state: present
+  become: yes
+  become_user: root
+
+- name: Add ceph repository
+  apt_repository:
+    repo: deb https://download.ceph.com/debian-kraken/ jessie main
+    state: present
+    update_cache: yes
+  become: yes
+  become_user: root
+
+- name: Install ceph-deploy
+  apt:
+    name: ceph-deploy
+  become: yes
+  become_user: root
+
+- name: Create cluster directory
+  file:
+    path: "{{ cluster_path }}"
+    state: directory
+    mode: 0755
+
+- name: Check presence of cluster
+  stat:
+    path: "{{ cluster_path }}/ceph.conf"
+  register: cluster_here
+  changed_when: False
+
+- name: Deploy cluster
+  command: ceph-deploy new "{{ item.hostname }}"
+  args:
+    chdir: "{{ cluster_path }}"
+  with_items:
+  - "{{ ceph_monitors[0] }}"
+  when:
+    - not ansible_check_mode
+    - cluster_here.stat.exists == False
+
+- name: Change pool size
+  lineinfile:
+    path: "{{ cluster_path }}/ceph.conf"
+    line: "osd pool default size = {{ ceph_osds | length }}"
+    state: present
+
+- name: Ceph deploy-install on all Nodes
+  command: ceph-deploy install --release kraken "{{ ceph_master.hostname }}" "{{ item.hostname }}"
+  args:
+    chdir: "{{ cluster_path }}"
+  with_items:
+  - "{{ ceph_monitors }}"
+  - "{{ ceph_osds }}"
+
+- name: Check presence of monitors
+  shell: ceph node ls mon | grep "{{ item.hostname }}"
+  register: mon_present
+  ignore_errors: True
+  changed_when: False
+  with_items:
+    - "{{ ceph_monitors }}"
+
+- name: Ceph create initial monitor
+  command: ceph-deploy mon create-initial
+  args:
+    chdir: "{{ cluster_path }}"
+  with_items:
+    - "{{ ceph_monitors[0] }}"
+  check_mode: no
+  when:
+    - not ansible_check_mode
+    - mon_present.results[0] | failed
+
+- name: Create OSD folder
+  file:
+    path: "{{ item.osd_path }}"
+    state: directory
+    mode: 0777
+  delegate_to: "{{ item.hostname }}"
+  become: yes
+  become_user: root
+  with_items: "{{ ceph_osds }}"
+
+- name: Check presence of OSD
+  shell: ceph node ls osd | grep "{{ item.hostname }}"
+  register: osd_present
+  ignore_errors: true
+  changed_when: False
+  with_items:
+    - "{{ ceph_osds }}"
+
+- name: Prepare OSD
+  shell: ceph-deploy osd prepare "{{ item.hostname }}":"{{ item.osd_path }}"
+  args:
+    chdir: "{{ cluster_path }}"
+  check_mode: no
+  when:
+    - not ansible_check_mode
+  with_items:
+    - "{{ ceph_osds }}"
+
+- name: Activate OSD
+  shell: ceph-deploy osd activate "{{ item.hostname }}":"{{ item.osd_path }}"
+  args:
+    chdir: "{{ cluster_path }}"
+  check_mode: no
+  when:
+    - not ansible_check_mode
+  with_items:
+    - "{{ ceph_osds }}"
+
+- name: Administrate nodes
+  command: ceph-deploy admin "{{ item.hostname }}"
+  args:
+    chdir: "{{ cluster_path }}"
+  with_items:
+    - "{{ ceph_osds }}"
+    - "{{ ceph_monitors }}"
+
+- name : Allow reading Keyring
+  file: 
+    path: /etc/ceph/ceph.client.admin.keyring
+    mode: "u+r,g+r,o+r"
+  become: true
+  become_user: root
+  delegate_to: "{{ item.hostname }}"
+  with_items:
+    - "{{ ceph_monitors }}"
+    - "{{ ceph_osds }}"
+    - "{{ ceph_master }}"
+
+- name: Install Rados Gateway
+  command: ceph-deploy install --release kraken --rgw "{{ item.hostname }}"
+  args:
+    chdir: "{{ cluster_path }}"
+  with_items:
+    - "{{ ceph_rgws }}"
+
+- name: Add admin info to gateway
+  command: ceph-deploy admin "{{ item.hostname }}"
+  args:
+    chdir: "{{ cluster_path }}"
+  with_items:
+    - "{{ ceph_rgws }}"
+
+- name : Allow reading Keyring
+  file: 
+    path: /etc/ceph/ceph.client.admin.keyring
+    mode: "u+r,g+r,o+r"
+  become: true
+  become_user: root
+  delegate_to: "{{ item.hostname }}"
+  with_items:
+    - "{{ ceph_rgws }}"
+
+- name: Create gateway instance
+  command: ceph-deploy rgw create "{{ item.hostname }}"
+  args:
+    chdir: "{{ cluster_path }}"
+  with_items:
+    - "{{ ceph_rgws }}"
+
+- name: Disallow all users to use sudo
+  user: 
+    name: admin
+    groups:
+    state: present
+  delegate_to: "{{ item.hostname }}"
+  with_items:
+    - "{{ ceph_monitors }}"
+    - "{{ ceph_osds }}"
+    - "{{ ceph_master }}"
+    - "{{ ceph_rgws }}"
+

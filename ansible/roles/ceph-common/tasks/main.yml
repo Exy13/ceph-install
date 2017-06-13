@@ -1,0 +1,35 @@
+---
+  - name: Install sudo
+    apt:
+      name: sudo
+      update_cache: yes
+  - name: Install https packages
+    apt:
+      name: "{{ item }}"
+    with_items:
+      - openssl
+      - ca-certificates
+      - apt-transport-https
+  - name: Install apt transport https
+    apt:
+      name: 
+  - name: Install ntp
+    apt:
+      name: ntp
+  - name: Make sudoless group
+    group:
+      name: wheel
+      state: present
+  - name: Allow 'wheel' group to have passwordless sudo
+    lineinfile:
+      dest: /etc/sudoers
+      state: present
+      regexp: '^%wheel'
+      line: '%wheel ALL=(ALL) NOPASSWD: ALL'
+      validate: visudo -cf %s
+  - name: Creating admin user
+    user:
+      name: admin
+      groups: wheel
+      state: present
+      password: "{{hash_password}}"

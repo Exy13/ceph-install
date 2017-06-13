@@ -1,0 +1,9 @@
+---
+  ceph_master: {hostname: ceph-dev}
+  ceph_monitors:
+    - {hostname: ceph-dev}
+  ceph_osds:
+    - {hostname: ceph-dev, osd_path: /var/local/osd0}
+  ceph_rgws:
+    - {hostname: ceph-dev}
+  cluster_path: '/home/admin/cluster-ceph'

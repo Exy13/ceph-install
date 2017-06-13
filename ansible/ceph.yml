@@ -1,0 +1,19 @@
+---
+
+- hosts: ceph_all
+  remote_user: root
+  vars_files:
+   - group_vars/ceph
+  roles:
+   - { role: ceph-common, tags: ['ceph-common'] }
+
+- hosts: ceph_master
+  remote_user: root
+  become: yes
+  become_user: admin
+  become_method: su
+  vars_files:
+   - group_vars/ceph
+  roles:
+    - {role: ceph-master, tags: ['ceph-master'] }
+

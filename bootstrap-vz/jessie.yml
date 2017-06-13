@@ -1,0 +1,34 @@
+---
+name: ceph-dev
+provider:
+  name: kvm
+bootstrapper:
+  workspace: /tmp/skylt/vzboot/
+system:
+  hostname: ceph-dev
+  release: jessie
+  architecture: amd64
+  bootloader: grub
+  charmap: UTF-8
+  locale: en_US
+  timezone: UTC
+volume:
+  backing: raw
+  partitions:
+    type: gpt
+    boot:
+      filesystem: ext4
+      size: 512MB
+    root:
+      filesystem: xfs
+      size: 200GB
+packages:
+  install:
+    - python
+plugins:
+  root_password:
+    password: test
+  commands:
+    commands:
+      - [mkdir, '{root}/root/.ssh']
+      - ['echo ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDiB8DpsOr98/qphiyZuwo3yWVS4HsMc2dG9pHSE/TyKPj8McsEFmNvCYCUPAK26+cWH/HYYUDkqSGUbQ7HvYpNbzjsjlBRsxLoVnSgZ/rk5330YXfWz/ooCzf87w2521r+hEeJhjnofiI4d7KZyojiLcWqW9346umwvFqxwgwAYSl9ucIL6LoE5LOSa22eQAEkqjYwodxuoDvWVJV8B0JThPVf+Vs2Yg7yJ/Y1DUjY6DQwfn8ZJ7Uc0squRWepTB2RQ6f6qVreFfIMlf61v1/3HiNRAOoTczW0zdBkT1+LSySGzw+3wf3tFXxE0Fu34FDgBQg7CVMzR7N+/pfTLqMIqnEVhFahz0c2doMdIzPvjVUy0+SfHuw2rHcOZfepUKqAhUHxiTcaaNvzNrDzl06dA7pNhh6CcMMmLp22S9f05bAzttYSKrfMzluics1RGZRJBNSYpB0hMT1Mq3CoCfUJ/OIZtZU2vzCeWZ7oGWAn/P7EM8PKoulprhACmmOhp9r9YY5wy0dpPG8+/PRWMFQ+FdH4LChsetblpcn147178tCIkE0Hb+UPMZ4UNsZwmRbmP6V42s7VOuUEQGgcW3ugO3Aiocl157GRfaWwNVsouWOlKi96FNBKEIQUcXrV2LkG+hzDp4Ym4MBfSmNXizkH6RDkjSay1Foc2ZG297idQw== skylt@harley >> {root}/root/.ssh/authorized_keys']

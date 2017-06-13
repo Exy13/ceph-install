@@ -1,0 +1,5 @@
+[ceph_master]
+ceph-dev
+
+[ceph_all]
+ceph-dev
